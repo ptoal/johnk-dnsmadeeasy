@@ -68,7 +68,7 @@ func checkRespForError(resp *resty.Response, err error) (*resty.Response, error)
 }
 
 func GetClient(APIToken string, APISecret string, url BaseURL) *Client {
-	r := resty.New().SetBaseURL(string(url)).SetDebug(false)
+	r := resty.New().SetBaseURL(string(url))
 	return &Client{APIToken, APISecret, url, r, nil}
 }
 
@@ -191,7 +191,6 @@ func (c *Client) EnumerateRecords(domainId int) ([]Record, error) {
 	var respRecords RecordsResp
 	req := c.newRequest().
 		SetResult(&respRecords).
-		SetDebug(false).
 		SetPathParam("domainId", fmt.Sprint(domainId))
 
 	_, err := checkRespForError(req.Get(DNSManagedPath + DNSRecordsPath))
@@ -207,7 +206,6 @@ func (c *Client) DeleteRecords(domainId int, records []int) ([]int, error) {
 
 	for _, id := range records {
 		req := c.newRequest().
-			SetDebug(false).
 			SetPathParam("domainId", fmt.Sprint(domainId)).
 			SetPathParam("recordId", fmt.Sprint(id))
 
@@ -228,7 +226,6 @@ func (c *Client) CreateRecord(domainId int, record Record) (Record, error) {
 	var newRecord Record
 
 	req := c.newRequest().
-		SetDebug(true).
 		SetResult(&newRecord).
 		SetBody(&record).
 		SetPathParam("domainId", fmt.Sprint(domainId))
