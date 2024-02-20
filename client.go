@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -24,15 +25,16 @@ const (
 )
 
 type Client struct {
-	APIToken  string
-	APISecret string
-	BaseURL   BaseURL
-	resty     *resty.Client
+	APIToken    string
+	APISecret   string
+	BaseURL     BaseURL
+	resty       *resty.Client
+	zoneIdCache map[string]int
 }
 
 func GetClient(APIToken string, APISecret string, url BaseURL) *Client {
 	r := resty.New().SetBaseURL(string(url)).SetDebug(false)
-	return &Client{APIToken, APISecret, url, r}
+	return &Client{APIToken, APISecret, url, r, nil}
 }
 
 func (c *Client) addAuthHeaders(req *resty.Request) {
@@ -95,6 +97,40 @@ func (c *Client) EnumerateDomains() (map[string]int, error) {
 	}
 
 	return domains, nil
+}
+
+func (c *Client) IdForDomain(domain string) (int, error) {
+	justPopulated := false
+	if c.zoneIdCache == nil {
+		domainMap, err := c.EnumerateDomains()
+		if err != nil {
+			return 0, err
+		}
+		c.zoneIdCache = domainMap
+		justPopulated = true
+	}
+
+	zoneId, ok := c.zoneIdCache[domain]
+	if ok {
+		return zoneId, nil
+	} else {
+		// if we didn't just populate the cache, refresh it in case
+		// our domain exists now
+		if !justPopulated {
+			domainMap, err := c.EnumerateDomains()
+			if err != nil {
+				return 0, err
+			}
+			c.zoneIdCache = domainMap
+			justPopulated = true
+		}
+		zoneId, ok := c.zoneIdCache[domain]
+		if ok {
+			return zoneId, nil
+		}
+	}
+
+	return 0, errors.New("Domain not found")
 }
 
 type Record struct {
