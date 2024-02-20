@@ -303,3 +303,23 @@ func (c *Client) CreateRecord(domainId int, record Record) (Record, error) {
 
 	return newRecord, nil
 }
+
+// Create many records at once in the supplied domain
+//
+// NOTE: is transactional; an error in creating any record causes none to be created
+func (c *Client) CreateRecords(domainId int, record []Record) ([]Record, error) {
+	var newRecords []Record
+
+	req := c.newRequest().
+		SetResult(&newRecords).
+		SetDebug(true).
+		SetBody(&record).
+		SetPathParam("domainId", fmt.Sprint(domainId))
+
+	_, err := checkRespForError(req.Post(DNSManagedPath + DNSRecordsPath + "/createMulti"))
+	if err != nil {
+		return []Record{}, err
+	}
+
+	return newRecords, nil
+}
