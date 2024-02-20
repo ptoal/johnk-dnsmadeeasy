@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -31,6 +32,39 @@ type Client struct {
 	BaseURL     BaseURL
 	resty       *resty.Client
 	zoneIdCache map[string]int
+}
+
+func checkRespForError(resp *resty.Response, err error) (*resty.Response, error) {
+	if err != nil {
+		return resp, err
+	}
+
+	var data map[string]interface{}
+
+	if err := json.Unmarshal(resp.Body(), &data); err != nil {
+		return resp, err
+	}
+
+	if data["error"] == nil {
+		return resp, err
+	}
+
+	//translate the array of strings that is DME's error json element
+	// ie { "error": [ "", "" ] }
+	resp_errors := data["error"].([]interface{})
+	if len(resp_errors) > 0 {
+		var error string
+		if len(resp_errors) == 1 {
+			error = resp_errors[0].(string)
+		} else {
+			for idx, err := range resp_errors {
+				error += fmt.Sprintf("%d: %s\n", idx, err.(string))
+			}
+		}
+		return resp, errors.New(error)
+	}
+
+	return resp, err
 }
 
 func GetClient(APIToken string, APISecret string, url BaseURL) *Client {
@@ -82,15 +116,11 @@ func (c *Client) EnumerateDomains() (map[string]int, error) {
 	domains := map[string]int{}
 
 	var respDomains DomainsResp
-	resp, err := c.newRequest().
+	_, err := checkRespForError(c.newRequest().
 		SetResult(&respDomains).
-		Get(DNSManagedPath)
+		Get(DNSManagedPath))
 	if err != nil {
 		return nil, err
-	}
-
-	if resp.StatusCode() != 200 {
-		fmt.Printf("WARN: request returned status %d (%s)", resp.StatusCode(), resp.Status())
 	}
 
 	for _, domain := range respDomains.Domains {
@@ -163,13 +193,10 @@ func (c *Client) EnumerateRecords(domainId int) ([]Record, error) {
 		SetResult(&respRecords).
 		SetDebug(false).
 		SetPathParam("domainId", fmt.Sprint(domainId))
-	resp, err := req.Get(DNSManagedPath + DNSRecordsPath)
+
+	_, err := checkRespForError(req.Get(DNSManagedPath + DNSRecordsPath))
 	if err != nil {
 		return nil, err
-	}
-
-	if resp.StatusCode() != 200 {
-		fmt.Printf("WARN: request returned status %d (%s)", resp.StatusCode(), resp.Status())
 	}
 
 	return respRecords.Records, nil
@@ -183,8 +210,11 @@ func (c *Client) DeleteRecords(domainId int, records []int) ([]int, error) {
 			SetDebug(false).
 			SetPathParam("domainId", fmt.Sprint(domainId)).
 			SetPathParam("recordId", fmt.Sprint(id))
-		_, err := req.Delete(DNSManagedPath + DNSRecordPath)
+
+		_, err := checkRespForError(req.Delete(DNSManagedPath + DNSRecordPath))
 		if err != nil {
+			// TODO: should we be returning both a result and a collection of
+			// errors encountered along the way?
 			fmt.Printf("Error deleting record %d from domain %d: %s\n", id, domainId, err)
 			continue
 		}
