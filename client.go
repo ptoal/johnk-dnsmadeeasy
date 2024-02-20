@@ -312,7 +312,6 @@ func (c *Client) CreateRecords(domainId int, record []Record) ([]Record, error) 
 
 	req := c.newRequest().
 		SetResult(&newRecords).
-		SetDebug(true).
 		SetBody(&record).
 		SetPathParam("domainId", fmt.Sprint(domainId))
 
