@@ -34,44 +34,56 @@ type Client struct {
 	zoneIdCache map[string]int
 }
 
+// Construct a client using the supplied values
+func GetClient(APIToken string, APISecret string, url BaseURL) *Client {
+	r := resty.New().SetBaseURL(string(url))
+	return &Client{APIToken, APISecret, url, r, nil}
+}
+
+// Convenience function to determine the error status of a response
+// from DNS Made Easy
 func checkRespForError(resp *resty.Response, err error) (*resty.Response, error) {
+	// first bubble up any error passed to us
 	if err != nil {
 		return resp, err
 	}
 
 	var data map[string]interface{}
 
-	if err := json.Unmarshal(resp.Body(), &data); err != nil {
-		return resp, err
-	}
-
-	if data["error"] == nil {
-		return resp, err
-	}
-
-	//translate the array of strings that is DME's error json element
-	// ie { "error": [ "", "" ] }
-	resp_errors := data["error"].([]interface{})
-	if len(resp_errors) > 0 {
-		var error string
-		if len(resp_errors) == 1 {
-			error = resp_errors[0].(string)
-		} else {
-			for idx, err := range resp_errors {
-				error += fmt.Sprintf("%d: %s\n", idx, err.(string))
+	// next check for json-formatted errors in the response body
+	err = json.Unmarshal(resp.Body(), &data)
+	// no error indicates that we were able to de-serialize some json
+	if err == nil {
+		if data["error"] != nil {
+			// translate the array of strings that is DME's error json element
+			// ie { "error": [ "", "" ] }
+			resp_errors := data["error"].([]interface{})
+			if len(resp_errors) > 0 {
+				var error string
+				if len(resp_errors) == 1 {
+					error = resp_errors[0].(string)
+				} else {
+					for idx, err := range resp_errors {
+						error += fmt.Sprintf("%d: %s\n", idx, err.(string))
+					}
+				}
+				return resp, errors.New(error)
 			}
 		}
-		return resp, errors.New(error)
 	}
 
-	return resp, err
+	// lastly, check for an HTTP error code
+	status := resp.StatusCode()
+	if status < 200 || status >= 300 {
+		return resp, fmt.Errorf("request returned http error code %d", status)
+	}
+
+	// if we got here, there are no errors
+	return resp, nil
 }
 
-func GetClient(APIToken string, APISecret string, url BaseURL) *Client {
-	r := resty.New().SetBaseURL(string(url))
-	return &Client{APIToken, APISecret, url, r, nil}
-}
-
+// Convenience function to calculate the authentication headers
+// expected by DNS Made Easy
 func (c *Client) addAuthHeaders(req *resty.Request) {
 	requestDate := time.Now().UTC().Format(http.TimeFormat)
 
@@ -86,8 +98,9 @@ func (c *Client) addAuthHeaders(req *resty.Request) {
 	req.Header.Add("X-Dnsme-Hmac", hmacString)
 }
 
+// Convenience function to construct a request with common headers
 func (c *Client) newRequest() *resty.Request {
-	req := c.resty.R().EnableTrace().ExpectContentType("application/json").
+	req := c.resty.R().ExpectContentType("application/json").
 		SetHeader("Content-Type", "application/json")
 	c.addAuthHeaders(req)
 	return req
@@ -112,6 +125,8 @@ type DomainsResp struct {
 	CurrentPage  int      `json:"page"`
 }
 
+// Returns a map of Name:ID for all domains managed by the
+// given account
 func (c *Client) EnumerateDomains() (map[string]int, error) {
 	domains := map[string]int{}
 
@@ -130,6 +145,7 @@ func (c *Client) EnumerateDomains() (map[string]int, error) {
 	return domains, nil
 }
 
+// Finds the numerical ID for a given domain name
 func (c *Client) IdForDomain(domain string) (int, error) {
 	justPopulated := false
 	if c.zoneIdCache == nil {
@@ -165,19 +181,60 @@ func (c *Client) IdForDomain(domain string) (int, error) {
 }
 
 type Record struct {
-	Name        string `json:"name"`
-	ID          int    `json:"id"`
-	Type        string `json:"type"`
-	Value       string `json:"value"`
-	Source      int    `json:"source"`
-	Ttl         int    `json:"ttl"`
+	// A unique name per record Type
+	Name string `json:"name"`
+
+	// A unique identifier for this record
+	ID int `json:"id,omitempty"`
+
+	// Can be one of: A, AAAA, ANAME, CNAME, HTTPRED, MX
+	//                NS, PTR, SRV, TXT, SPF, or SOA
+	Type string `json:"type"`
+
+	// Differs per record type
+	Value string `json:"value"`
+
+	// 1 if the record is the record is domain specific
+	// 0 if the record is part of a template
+	Source int `json:"source,omitempty"`
+
+	// The time to live of the record
+	Ttl int `json:"ttl"`
+
+	// Global Traffic Director location.
+	// Values: DEFAULT, US_EAST, US_WEST, EUROPE,
+	//         ASIA_PAC, OCREANIA, SOUTH_AMERICA
 	GtdLocation string `json:"gtdLocation"`
-	SourceId    int    `json:"sourceId"`
-	Failover    bool   `json:"failover"`
-	Monitor     bool   `json:"monitor"`
-	HardLink    bool   `json:"hardLink"`
-	DynamicDns  bool   `json:"dynamicDns"`
-	Failed      bool   `json:"failed"`
+
+	// The domain ID of this record
+	SourceId int `json:"sourceId,omitempty"`
+
+	// Indicates if DNS Failover is enabled for an A record
+	Failover bool `json:"failover,omitempty"`
+
+	// Indicates if System Monitoring is enabled for an A record
+	Monitor bool `json:"monitor,omitempty"`
+
+	// For HTTP Redirection Records
+	HardLink bool `json:"hardLink,omitempty"`
+
+	// Indicates if the record has dynamic DNS enabled
+	DynamicDns bool `json:"dynamicDns,omitempty"`
+
+	// Indicates if an A record is in failed status
+	Failed bool `json:"failed,omitempty"`
+
+	// The priority for an MX record
+	MxLevel int `json:"mxLevel,omitempty"`
+
+	// The priority for an SRV record
+	Priority int `json:"priority,omitempty"`
+
+	// The weight for an SRV record
+	Weight int `json:"weight,omitempty"`
+
+	// The port for an SRV record
+	Port int `json:"port,omitempty"`
 }
 
 type RecordsResp struct {
@@ -201,27 +258,36 @@ func (c *Client) EnumerateRecords(domainId int) ([]Record, error) {
 	return respRecords.Records, nil
 }
 
-func (c *Client) DeleteRecords(domainId int, records []int) ([]int, error) {
-	var deleted []int
+// Deletes records with numerical IDs for the supplied domain
+//
+// NOTE: will silently continue if a recordId that doesn't belong to the
+// given domainId is passed
+func (c *Client) DeleteRecords(domainId int, recordIds []int) ([]int, error) {
+	var queryString string
 
-	for _, id := range records {
-		req := c.newRequest().
-			SetPathParam("domainId", fmt.Sprint(domainId)).
-			SetPathParam("recordId", fmt.Sprint(id))
-
-		_, err := checkRespForError(req.Delete(DNSManagedPath + DNSRecordPath))
-		if err != nil {
-			// TODO: should we be returning both a result and a collection of
-			// errors encountered along the way?
-			fmt.Printf("Error deleting record %d from domain %d: %s\n", id, domainId, err)
-			continue
+	// build query string of ids=X&ids=Y&ids=Z
+	// we can't use other convenience methods since they use
+	// map[string] and only the last id would made it
+	for idx, id := range recordIds {
+		if idx > 0 {
+			queryString += "&"
 		}
-		deleted = append(deleted, id)
+		queryString += fmt.Sprintf("ids=%d", id)
 	}
 
-	return deleted, nil
+	req := c.newRequest().
+		SetPathParam("domainId", fmt.Sprint(domainId)).
+		SetPathParam("recordId", "").
+		SetQueryString(queryString)
+
+	_, err := checkRespForError(req.Delete(DNSManagedPath + DNSRecordPath))
+	if err != nil {
+		return nil, err
+	}
+	return recordIds, nil
 }
 
+// Creates a single record in the supplied domain
 func (c *Client) CreateRecord(domainId int, record Record) (Record, error) {
 	var newRecord Record
 
