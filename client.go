@@ -223,3 +223,20 @@ func (c *Client) DeleteRecords(domainId int, records []int) ([]int, error) {
 
 	return deleted, nil
 }
+
+func (c *Client) CreateRecord(domainId int, record Record) (Record, error) {
+	var newRecord Record
+
+	req := c.newRequest().
+		SetDebug(true).
+		SetResult(&newRecord).
+		SetBody(&record).
+		SetPathParam("domainId", fmt.Sprint(domainId))
+
+	_, err := checkRespForError(req.Post(DNSManagedPath + DNSRecordsPath))
+	if err != nil {
+		return Record{}, err
+	}
+
+	return newRecord, nil
+}
