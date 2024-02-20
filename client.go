@@ -15,6 +15,7 @@ import (
 const (
 	DNSManagedPath string = "/dns/managed/"
 	DNSRecordsPath string = "{domainId}/records"
+	DNSRecordPath  string = "{domainId}/records/{recordId}"
 )
 
 type BaseURL string
@@ -160,7 +161,7 @@ func (c *Client) EnumerateRecords(domainId int) ([]Record, error) {
 	var respRecords RecordsResp
 	req := c.newRequest().
 		SetResult(&respRecords).
-		SetDebug(true).
+		SetDebug(false).
 		SetPathParam("domainId", fmt.Sprint(domainId))
 	resp, err := req.Get(DNSManagedPath + DNSRecordsPath)
 	if err != nil {
@@ -172,4 +173,23 @@ func (c *Client) EnumerateRecords(domainId int) ([]Record, error) {
 	}
 
 	return respRecords.Records, nil
+}
+
+func (c *Client) DeleteRecords(domainId int, records []int) ([]int, error) {
+	var deleted []int
+
+	for _, id := range records {
+		req := c.newRequest().
+			SetDebug(false).
+			SetPathParam("domainId", fmt.Sprint(domainId)).
+			SetPathParam("recordId", fmt.Sprint(id))
+		_, err := req.Delete(DNSManagedPath + DNSRecordPath)
+		if err != nil {
+			fmt.Printf("Error deleting record %d from domain %d: %s\n", id, domainId, err)
+			continue
+		}
+		deleted = append(deleted, id)
+	}
+
+	return deleted, nil
 }
