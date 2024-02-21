@@ -27,17 +27,17 @@ const (
 )
 
 type Client struct {
-	APIToken    string
-	APISecret   string
+	APIKey      string
+	SecretKey   string
 	BaseURL     BaseURL
 	resty       *resty.Client
 	zoneIdCache map[string]int
 }
 
 // Construct a client using the supplied values
-func GetClient(APIToken string, APISecret string, url BaseURL) *Client {
+func GetClient(APIKey string, SecretKey string, url BaseURL) *Client {
 	r := resty.New().SetBaseURL(string(url))
-	return &Client{APIToken, APISecret, url, r, nil}
+	return &Client{APIKey, SecretKey, url, r, nil}
 }
 
 // Convenience function to determine the error status of a response
@@ -88,12 +88,12 @@ func (c *Client) addAuthHeaders(req *resty.Request) {
 	requestDate := time.Now().UTC().Format(http.TimeFormat)
 
 	// Calculate the hexadecimal HMAC SHA1 of requestDate using APIKey
-	key := []byte(c.APISecret)
+	key := []byte(c.SecretKey)
 	h := hmac.New(sha1.New, key)
 	h.Write([]byte(requestDate))
 	hmacString := hex.EncodeToString(h.Sum(nil))
 
-	req.Header.Add("X-Dnsme-Apikey", c.APIToken)
+	req.Header.Add("X-Dnsme-Apikey", c.APIKey)
 	req.Header.Add("X-Dnsme-Requestdate", requestDate)
 	req.Header.Add("X-Dnsme-Hmac", hmacString)
 }
