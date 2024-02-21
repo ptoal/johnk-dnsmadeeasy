@@ -307,12 +307,12 @@ func (c *Client) CreateRecord(domainId int, record Record) (Record, error) {
 // Create many records at once in the supplied domain
 //
 // NOTE: is transactional; an error in creating any record causes none to be created
-func (c *Client) CreateRecords(domainId int, record []Record) ([]Record, error) {
+func (c *Client) CreateRecords(domainId int, records []Record) ([]Record, error) {
 	var newRecords []Record
 
 	req := c.newRequest().
 		SetResult(&newRecords).
-		SetBody(&record).
+		SetBody(&records).
 		SetPathParam("domainId", fmt.Sprint(domainId))
 
 	_, err := checkRespForError(req.Post(DNSManagedPath + DNSRecordsPath + "/createMulti"))
@@ -321,4 +321,20 @@ func (c *Client) CreateRecords(domainId int, record []Record) ([]Record, error) 
 	}
 
 	return newRecords, nil
+}
+
+func (c *Client) UpdateRecords(domainId int, records []Record) ([]Record, error) {
+	var updatedRecords []Record
+
+	req := c.newRequest().
+		SetResult(&updatedRecords).
+		SetBody(&records).
+		SetPathParam("domainId", fmt.Sprint(domainId))
+
+	_, err := checkRespForError(req.Post(DNSManagedPath + DNSRecordsPath + "/updateMulti"))
+	if err != nil {
+		return []Record{}, err
+	}
+
+	return updatedRecords, nil
 }
