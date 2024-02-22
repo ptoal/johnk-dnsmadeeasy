@@ -115,7 +115,13 @@ type Domain struct {
 	ProcessMulti       bool     `json:"processMulti"`
 	ActiveThirdParties []string `json:"activeThirdParties"`
 	GtdEnabled         bool     `json:"gtdEnabled"`
-	PendingActionID    int      `json:"pendingActionId"`
+
+	// Identifies which action is currently pending
+	// Values:
+	//  0 - nothing pending
+	//  1 - pending creation (usable but not fully created throughout the system)
+	//  3 - pending deletion
+	PendingActionID int `json:"pendingActionId"`
 }
 
 type DomainsResp struct {
@@ -123,6 +129,42 @@ type DomainsResp struct {
 	TotalPages   int      `json:"totalPages"`
 	Domains      []Domain `json:"data"`
 	CurrentPage  int      `json:"page"`
+}
+
+// Creates a new domain
+func (c *Client) CreateDomain(domainName string) (Domain, error) {
+	var newDomain Domain
+
+	createDomainBody := fmt.Sprintf(`{"name":"%s"}`, domainName)
+	req := c.newRequest().
+		SetResult(&newDomain).
+		SetBody(createDomainBody)
+
+	_, err := checkRespForError(req.Post(DNSManagedPath))
+	if err != nil {
+		return Domain{}, err
+	}
+
+	return newDomain, nil
+}
+
+// Removes a domain and all associated records
+func (c *Client) DeleteDomain(domainID int) error {
+	_, err := checkRespForError(c.newRequest().
+		Delete(fmt.Sprint(DNSManagedPath, domainID)))
+	return err
+}
+
+// Returns the domain record for a given domain ID
+func (c *Client) GetDomain(domainID int) (Domain, error) {
+	var domain Domain
+	_, err := checkRespForError(c.newRequest().
+		SetResult(&domain).
+		Get(DNSManagedPath + fmt.Sprint(domainID)))
+	if err != nil {
+		return Domain{}, err
+	}
+	return domain, nil
 }
 
 // Returns a map of Name:ID for all domains managed by the
