@@ -8,6 +8,9 @@
 *.so
 *.dylib
 
+# env file, for use with testing
+.env
+
 # Test binary, built with `go test -c`
 *.test
 
