@@ -300,6 +300,14 @@ func (c *Client) EnumerateRecords(domainId int) ([]Record, error) {
 	return respRecords.Records, nil
 }
 
+// Deletes all records for the supplied domain
+func (c *Client) DeleteAllRecords(domainID int) error {
+	_, err := checkRespForError(c.newRequest().
+		SetPathParam("domainId", fmt.Sprint(domainID)).
+		Delete(DNSManagedPath + DNSRecordsPath))
+	return err
+}
+
 // Deletes records with numerical IDs for the supplied domain
 //
 // NOTE: will silently continue if a recordId that doesn't belong to the
