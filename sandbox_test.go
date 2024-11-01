@@ -102,9 +102,23 @@ func TestSandboxIntegration(t *testing.T) {
 		}
 		assert.Len(t, records, toCreate)
 	})
-	/*t.Run("update records", func(t *testing.T) {
+	t.Run("update records", func(t *testing.T) {
+		var recordsToUpdate []Record
+		records, err := client.EnumerateRecords(testDomains[0].ID)
+		if err != nil {
+			t.Error(err)
+		}
+		for _, record := range records {
+			record.Value = "1.1.1.2"
+			recordsToUpdate = append(recordsToUpdate, record)
+		}
+		updatedRecords, err := client.UpdateRecords(testDomains[0].ID, recordsToUpdate)
+		if err != nil {
+			t.Error(err)
+		}
+		assert.Len(t, updatedRecords, toCreate)
 
-	})*/
+	})
 	t.Run("delete all records", func(t *testing.T) {
 		err := client.DeleteAllRecords(testDomains[0].ID)
 		if err != nil {

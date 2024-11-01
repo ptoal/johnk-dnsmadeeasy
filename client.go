@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -360,6 +361,10 @@ func (c *Client) CreateRecord(domainId int, record Record) (Record, error) {
 func (c *Client) CreateRecords(domainId int, records []Record) ([]Record, error) {
 	var newRecords []Record
 
+	if len(records) == 0 {
+		return []Record{}, nil
+	}
+
 	req := c.newRequest().
 		SetResult(&newRecords).
 		SetBody(&records).
@@ -376,14 +381,35 @@ func (c *Client) CreateRecords(domainId int, records []Record) ([]Record, error)
 func (c *Client) UpdateRecords(domainId int, records []Record) ([]Record, error) {
 	var updatedRecords []Record
 
+	if len(records) == 0 {
+		return []Record{}, nil
+	}
+
+	// DME API doesn't return anything in the body for this call.
 	req := c.newRequest().
-		SetResult(&updatedRecords).
 		SetBody(&records).
 		SetPathParam("domainId", fmt.Sprint(domainId))
 
-	_, err := checkRespForError(req.Post(DNSManagedPath + DNSRecordsPath + "/updateMulti"))
+	_, err := checkRespForError(req.Put(DNSManagedPath + DNSRecordsPath + "/updateMulti"))
 	if err != nil {
+		fmt.Printf("%s\n", err)
 		return []Record{}, err
+	}
+	// Enumerate the records, and compare to our records, updating IDs
+	dmeRecords, err := c.EnumerateRecords(domainId)
+	if err != nil {
+		fmt.Printf("%s\n", err)
+		return []Record{}, err
+	}
+
+	for _, record := range records {
+		foundIdx := slices.IndexFunc(dmeRecords, func(dmeRecord Record) bool {
+			return record.Type == dmeRecord.Type && record.Name == dmeRecord.Name
+		})
+		if foundIdx != -1 {
+			record.ID = dmeRecords[foundIdx].ID
+			updatedRecords = append(updatedRecords, record)
+		}
 	}
 
 	return updatedRecords, nil
